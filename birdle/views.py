@@ -227,13 +227,10 @@ def practice(request, **kwargs):
                     if len(bird_list) > 0:
                         qs = Q(bird__name=bird_list[0])
                         for bird_name in bird_list[1:]:
-                            print(bird_name)
                             qs = qs | Q(bird__name=bird_name.lstrip())
                         birdregions = birdregions.filter(qs)
-                        print(birdregions)
                 birds = [x.bird for x in birdregions]
 
-            print(birds)
             birds_choices = choices(birds, k=4)
             bird = choices(birds_choices, k=1)[0]
             imgs = get_bird_images(bird=bird)
@@ -249,13 +246,10 @@ def practice(request, **kwargs):
         return render(request, "birdle/practice.html", {"form": form, **data})
     elif request.method == "POST":
         form = BirdRegionForm(request.POST)
-        # print(form)
-        # print(form.cleaned_data["allow_list"])
         if form.is_valid():
             region = quote(form.cleaned_data["region"])
             family = quote(form.cleaned_data["family"])
             allow_list = form.cleaned_data["allow_list"]
-            print(allow_list)
             return redirect("practice-region-family", region=region, family=family, allow_list=allow_list)
         else:
             return render(request, "birdle/practice.html", {"form": form})
