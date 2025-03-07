@@ -55,7 +55,7 @@ def todays_game(region="World"):
 
 def daily_bird(request):
     game = todays_game(request.session.get("region", "World"))
-    
+
     # Get user if available
     old_username = request.POST.get('user_id')
     if old_username:
@@ -66,7 +66,7 @@ def daily_bird(request):
     request.session["username"] = user.username
 
     usergame, _ = UserGame.objects.get_or_create(user=user, game=game)
-    
+
     if request.method == "GET":
         imgs = get_bird_images(bird=game.bird, game=game)
         # Get past guesses
@@ -77,13 +77,13 @@ def daily_bird(request):
         context = {
             "imgs": imgs,
             "bird": game.bird,
-            "is_winner": usergame.is_winner, 
+            "is_winner": usergame.is_winner,
             "guesses": [{**b.info(), "correctness": b.compare(game.bird)} for b in bird_guesses],
             "guess_count": usergame.guess_count,
             "emojis": build_results_emojis(game, guesses)
         }
         return render(request, 'birdle/daily_bird.html', context)
-    
+
     elif request.method == "POST":
         # Get the Bird the user guessed
         try:
@@ -91,7 +91,7 @@ def daily_bird(request):
         except (KeyError, Bird.DoesNotExist):
             error_msg = "That bird doesn't exist!"
             return HttpResponse(error_msg, status=400)
-        
+
         # Check if they still have guesses and have not won already
         if usergame.guess_count < 6 and not usergame.is_winner:
             # Add the user's guess to the database
@@ -100,7 +100,7 @@ def daily_bird(request):
                 bird=guess,
                 hint_used=request.POST.get('hint_used') == 'true'
             )
-        
+
         # Get all user guesses
         guesses = Guess.objects.filter(usergame=usergame).order_by('guessed_at')
 
@@ -125,7 +125,7 @@ def stats(request):
         today = datetime.utcnow().astimezone(pytz.timezone('US/Eastern')).date()
         first_game = min([usergame.game.date for usergame in usergames] + [today])
         games = Game.objects.filter(date__gte=first_game, date__lte=today, region__name=region).order_by("date")
-        
+
         # User stats
         games_played = len([game for game in usergames if game.guess_count > 0])
         wins = [game for game in usergames if game.is_winner]
@@ -144,7 +144,7 @@ def stats(request):
             else:
                 result = "Loss"
             return result
-        
+
         game_results = {
             str(usergame.game.date): result(usergame) for usergame in usergames
         }
@@ -156,7 +156,7 @@ def stats(request):
         history = [
             {"Date": date, "Result": result, "Bird": bird} for date, result, bird in zip(date_list, results, birds)
         ]
-        
+
         # Hide todays result if they're still playing and haven't won
         todays_result = usergames.filter(game__date=today)
         if todays_result:
@@ -210,19 +210,30 @@ def practice(request, **kwargs):
         if kwargs.values():
             region = kwargs.get("region")
             family = kwargs.get("family")
+            allow_list = kwargs.get("allow_list")
             decoded_region = unquote(region) if region else "Any"
             decoded_family = unquote(family) if family else "Any"
-            
+
             birdregions = BirdRegion.objects.all()
-            if decoded_region == "Any" and decoded_family == "Any":
+            if decoded_region == "Any" and decoded_family == "Any" and allow_list == "":
                 birds = Bird.objects.all()
             else:
                 if decoded_region != "Any":
                     birdregions = birdregions.filter(region__name=decoded_region)
                 if decoded_family != "Any":
                     birdregions = birdregions.filter(bird__family=decoded_family)
+                if allow_list != "Any":
+                    bird_list = allow_list.split(',')
+                    if len(bird_list) > 0:
+                        qs = Q(bird__name=bird_list[0])
+                        for bird_name in bird_list[1:]:
+                            print(bird_name)
+                            qs = qs | Q(bird__name=bird_name.lstrip())
+                        birdregions = birdregions.filter(qs)
+                        print(birdregions)
                 birds = [x.bird for x in birdregions]
-            
+
+            print(birds)
             birds_choices = choices(birds, k=4)
             bird = choices(birds_choices, k=1)[0]
             imgs = get_bird_images(bird=bird)
@@ -232,16 +243,20 @@ def practice(request, **kwargs):
                 "options": options,
                 "answer": bird
             })
-            form = BirdRegionForm(initial={"region": decoded_region, "family": decoded_family})
+            form = BirdRegionForm(initial={"region": decoded_region, "family": decoded_family, "allow_list": allow_list})
         else:
             form = BirdRegionForm()
         return render(request, "birdle/practice.html", {"form": form, **data})
     elif request.method == "POST":
         form = BirdRegionForm(request.POST)
+        # print(form)
+        # print(form.cleaned_data["allow_list"])
         if form.is_valid():
             region = quote(form.cleaned_data["region"])
             family = quote(form.cleaned_data["family"])
-            return redirect("practice-region-family", region=region, family=family)
+            allow_list = form.cleaned_data["allow_list"]
+            print(allow_list)
+            return redirect("practice-region-family", region=region, family=family, allow_list=allow_list)
         else:
             return render(request, "birdle/practice.html", {"form": form})
 
@@ -255,11 +270,11 @@ def get_bird_images(bird, game=None):
         ebird_sesh = requests.Session()
         ebird_adapter = requests.adapters.HTTPAdapter(max_retries=3)
         ebird_sesh.mount('https://', ebird_adapter)
-        
+
         # Get and parse the bird page on eBird
         response = ebird_sesh.get(bird.url)
         soup = BeautifulSoup(response.content, "html.parser")
-        
+
         # Get divs that contain images and captions
         items = soup.find_all("div", class_="CarouselResponsive-slide--photo")
 
@@ -273,7 +288,7 @@ def get_bird_images(bird, game=None):
         url_srcs = [x.find("img")["srcset"] for x in items]
         pattern = "https:\/\/cdn.download\.ams.birds\.cornell\.edu\/api\/v1\/asset\/\d+\/1800"
         urls = [re.search(pattern, src).group() for src in url_srcs]
-        
+
         # Zip everything together
         img_list = list(zip(labels, urls, photographer))
 
@@ -286,10 +301,10 @@ def get_bird_images(bird, game=None):
             HttpResponse("Range not found", status=400)
         else:
             img_list.append(("Range", range_url, None))
-        
+
         imgs = []
         for (label, url, photographer) in img_list:
-            img, _ = Image.objects.update_or_create(url=url, label=label, photographer=photographer, bird=bird) 
+            img, _ = Image.objects.update_or_create(url=url, label=label, photographer=photographer, bird=bird)
             imgs.append(img)
 
         return imgs
@@ -306,7 +321,7 @@ def bird_autocomplete(request):
 
     # Search for birds with names containing the query
     birds = Bird.objects.filter(birdregion__region__name=region).filter(q).order_by("name")
-    
+
     # Return a list of bird names as the autocomplete options
     options = [bird.name for bird in birds]
 
