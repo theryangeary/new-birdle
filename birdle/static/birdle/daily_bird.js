@@ -115,7 +115,12 @@ function updateHint(clippy, popover, hintData) {
     document.getElementById('hint_msg').textContent = hintData.message;
 
     if (hintData.message !== "The game's over. Go outside.") {
-      popover.show();
+      // Delay showing popover to allow proper positioning
+      setTimeout(() => {
+        popover.show();
+        // Force popover to recalculate position
+        popover.update();
+      }, 100);
     }
   }
 }
@@ -179,6 +184,19 @@ function initializeFormSubmission(clippy, popover, birdData) {
             timer: 2000,
             timerProgressBar: true
           });
+        } else if (response.status === 409) {
+          // Game has expired (new day started)
+          Swal.fire({
+            title: 'Game Expired',
+            text: 'A new daily bird is now available. Refreshing...',
+            icon: 'info',
+            timer: 2000,
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false
+          }).then(() => {
+            window.location.reload();
+          });
         }
         throw new Error('Request failed');
       }
@@ -202,6 +220,7 @@ function initializeFormSubmission(clippy, popover, birdData) {
       // Show alert if game over
       if (response.is_winner || response.guess_count == 6) {
         showAlert(response.guess_count, response.is_winner, response.emojis, birdData);
+        disableGameControls(response.is_winner);
       }
     })
     .catch(() => {
@@ -210,30 +229,50 @@ function initializeFormSubmission(clippy, popover, birdData) {
   });
 }
 
+// Disable input and submit button when game is over
+function disableGameControls(is_winner = false) {
+  const guessInput = document.getElementById('guess-input');
+  const submitButton = document.getElementById('submit-button');
+
+  guessInput.disabled = true;
+  guessInput.placeholder = is_winner ? 'You won!' : 'Better luck tomorrow!';
+  submitButton.disabled = true;
+
+  // Remove HTMX attributes to prevent autocomplete
+  guessInput.removeAttribute('hx-get');
+  guessInput.removeAttribute('hx-trigger');
+  guessInput.removeAttribute('hx-target');
+  guessInput.removeAttribute('hx-vals');
+}
+
 // Initialize everything on page load
 document.addEventListener('DOMContentLoaded', () => {
   const config = window.birdleConfig;
 
   const clippy = document.getElementById('clippy');
-  const popover = new bootstrap.Popover(clippy);
+  const popover = new bootstrap.Popover(clippy, {
+    placement: 'left'
+  });
 
   // Initialize hint system
   initializeHintSystem(clippy, popover);
 
+  // Check if game is over
+  const isGameOver = config.isWinner || config.guessCount == 6;
+
   // Show initial alert if game is over
-  if (config.isWinner || config.guessCount == 6) {
+  if (isGameOver) {
     showAlert(config.guessCount, config.isWinner, config.emojis, config.bird);
+    disableGameControls(config.isWinner);
+  } else {
+    // Only show hint if game is not over
+    updateHint(clippy, popover, config.hint);
   }
 
-  // Show hint if available
-  updateHint(clippy, popover, config.hint);
-
-  // Initialize autocomplete filters from existing correct guesses
-  config.guesses.forEach((guess) => {
-    if (guess.correctness[0]) updateCorrectTaxonomy({order: guess.order});
-    if (guess.correctness[1]) updateCorrectTaxonomy({family: guess.family});
-    if (guess.correctness[2]) updateCorrectTaxonomy({genus: guess.genus});
-  });
+  // Initialize autocomplete filters from correct taxonomy
+  if (config.correctTaxonomy) {
+    updateCorrectTaxonomy(config.correctTaxonomy);
+  }
 
   // Set up autocomplete and form submission
   initializeAutocomplete();

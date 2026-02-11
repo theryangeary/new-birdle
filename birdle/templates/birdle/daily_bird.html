@@ -9,6 +9,7 @@
     {% csrf_token %}
     <input type="hidden" name="user_id" id="user_id" value="">
     <input type="hidden" name="hint_used" id="hint_used" value="">
+    <input type="hidden" name="game_id" id="game_id" value="{{ game_id }}">
     <div class="row justify-content-center mx-auto py-2 position-relative">
       <div class="col-9 col-lg-6 px-1 position-relative" id="autocomplete-container">
         <input type="text" class="form-control text-center" name="guess-input" id="guess-input" placeholder="Guess"
@@ -50,7 +51,7 @@
   </div>
 </div>
 
-<button id="clippy" type="button" class="btn btn-sm btn-light btn-outline-secondary {% if not hint.show %}visually-hidden{% endif %} rounded-circle position-fixed bottom-0 end-0 mb-5 me-2" data-bs-toggle="popover" data-bs-trigger="click" title="{{ hint.title }}" data-bs-content='
+<button id="clippy" type="button" class="btn btn-sm btn-light btn-outline-secondary {% if not hint.show %}visually-hidden{% endif %} rounded-circle position-fixed bottom-0 end-0 mb-5 me-2" data-bs-toggle="popover" data-bs-placement="left" data-bs-trigger="click" title="{{ hint.title }}" data-bs-content='
 <div class="text-center">
 <a id="hintBtn" tabindex="0" type="button" class="btn btn-primary btn-sm py-0">Yes</a>
 <a id="noBtn" tabindex="0" type="button" class="btn btn-secondary btn-sm py-0">No</a>
@@ -80,6 +81,7 @@
     isWinner: {{ is_winner|lower }},
     guessCount: {{ guess_count }},
     emojis: `{{ emojis|escapejs }}`,
+    gameId: {{ game_id }},
     bird: {
       name: "{{ bird.name|escapejs }}",
       url: "{{ bird.url|escapejs }}"
@@ -89,21 +91,11 @@
       title: "{{ hint.title|escapejs }}",
       message: "{{ hint.message|escapejs }}"
     },
-    guesses: [
-      {% for guess in guesses %}
-      {
-        order: "{{ guess.order|escapejs }}",
-        family: "{{ guess.family|escapejs }}",
-        genus: "{{ guess.genus|escapejs }}",
-        name: "{{ guess.name|escapejs }}",
-        correctness: [
-          {{ guess.correctness.0|yesno:"true,false" }},
-          {{ guess.correctness.1|yesno:"true,false" }},
-          {{ guess.correctness.2|yesno:"true,false" }}
-        ]
-      }{% if not forloop.last %},{% endif %}
-      {% endfor %}
-    ]
+    correctTaxonomy: {
+      order: {% if correct_taxonomy.order %}"{{ correct_taxonomy.order|escapejs }}"{% else %}null{% endif %},
+      family: {% if correct_taxonomy.family %}"{{ correct_taxonomy.family|escapejs }}"{% else %}null{% endif %},
+      genus: {% if correct_taxonomy.genus %}"{{ correct_taxonomy.genus|escapejs }}"{% else %}null{% endif %}
+    }
   };
 </script>
 <script src="{% static 'birdle/daily_bird.js' %}"></script>
