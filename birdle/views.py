@@ -54,7 +54,9 @@ def todays_game(region_code="world", tz=None):
 
         # Create game if at least two images
         if len(imgs) >= 2:
-            game, _ = Game.objects.update_or_create(date=today, region=region, bird=bird)
+            game, _ = Game.objects.update_or_create(
+                date=today, region=region, defaults={"bird": bird}
+            )
         else:
             # Redraw bird if fewer than 2 images
             return todays_game(region_code, tz)
@@ -93,18 +95,38 @@ def daily_bird(request, region_code=None):
         # Convert guesses to Birds
         bird_guesses = [guess.bird for guess in guesses]
 
+        # Calculate correct taxonomy for autocomplete filtering
+        correct_taxonomy = {"order": None, "family": None, "genus": None}
+        for bird_guess in bird_guesses:
+            correctness = bird_guess.compare(game.bird)
+            if correctness[0]:
+                correct_taxonomy["order"] = bird_guess.order
+            if correctness[1]:
+                correct_taxonomy["family"] = bird_guess.family
+            if correctness[2]:
+                correct_taxonomy["genus"] = bird_guess.genus
+
         context = {
+            "game_id": game.id,
             "imgs": imgs,
             "bird": game.bird,
             "is_winner": usergame.is_winner,
+            "correct_taxonomy": correct_taxonomy,
             "guesses": [{**b.info(), "correctness": b.compare(game.bird)} for b in bird_guesses],
             "guess_count": usergame.guess_count,
             "emojis": build_results_emojis(game, guesses),
-            "hint": get_hint_data(usergame.guess_count, game.bird),
+            "hint": get_hint_data(usergame.guess_count, game.bird, usergame.is_winner),
         }
         return render(request, "birdle/daily_bird.html", context)
 
     elif request.method == "POST":
+        # Validate the game hasn't changed (new day started)
+        submitted_game_id = request.POST.get("game_id")
+        if submitted_game_id and int(submitted_game_id) != game.id:
+            response = HttpResponse(status=409)  # Conflict
+            response["HX-Trigger"] = json.dumps({"gameExpired": {}})
+            return response
+
         # Get the Bird the user guessed
         try:
             guess = Bird.objects.get(name=request.POST.get("guess-input"))
@@ -144,7 +166,7 @@ def daily_bird(request, region_code=None):
                 "family": guess.family if correctness[1] else None,
                 "genus": guess.genus if correctness[2] else None,
             },
-            "hint": get_hint_data(guess_count, game.bird),
+            "hint": get_hint_data(guess_count, game.bird, usergame.is_winner),
         }
         return JsonResponse(context)
 
@@ -193,10 +215,17 @@ def stats(request, region_code=None):
         # Create daily data for calendar view
         date_list = date_range(first_game, today, freq="D").map(lambda x: x.strftime("%Y-%m-%d"))
         results = [game_results.get(date, "Did not play") for date in date_list]
-        birds = [game.bird.name for game in games]
+
+        # Create date-to-bird mapping to handle missing Game objects
+        game_birds = {str(game.date): game.bird.name for game in games}
+
         history = [
-            {"Date": date, "Result": result, "Bird": bird}
-            for date, result, bird in zip(date_list, results, birds)
+            {
+                "Date": date,
+                "Result": result,
+                "Bird": game_birds.get(date, "No game")
+            }
+            for date, result in zip(date_list, results)
         ]
 
         # Hide todays result if they're still playing and haven't won
@@ -454,15 +483,15 @@ def region(request):
     )
 
 
-def get_hint_data(guess_count, bird):
-    """Generate hint information based on current guess count and bird."""
+def get_hint_data(guess_count, bird, is_winner=False):
+    """Generate hint information based on current guess count, bird, and win status."""
     if guess_count < 3:
         return {"show": False, "title": "", "message": ""}
 
-    if guess_count == 6:
+    if guess_count == 6 or is_winner:
         return {
             "show": True,
-            "title": "Another hint?",
+            "title": "You want a hint?",
             "message": "The game's over. Go outside."
         }
     elif guess_count == 5:
