@@ -220,11 +220,7 @@ def stats(request, region_code=None):
         game_birds = {str(game.date): game.bird.name for game in games}
 
         history = [
-            {
-                "Date": date,
-                "Result": result,
-                "Bird": game_birds.get(date, "No game")
-            }
+            {"Date": date, "Result": result, "Bird": game_birds.get(date, "No game")}
             for date, result in zip(date_list, results)
         ]
 
@@ -492,25 +488,25 @@ def get_hint_data(guess_count, bird, is_winner=False):
         return {
             "show": True,
             "title": "You want a hint?",
-            "message": "The game's over. Go outside."
+            "message": "The game's over. Go outside.",
         }
     elif guess_count == 5:
         return {
             "show": True,
             "title": "One final hint?",
-            "message": f"My name starts with '{bird.name[:3]}'."
+            "message": f"My name starts with '{bird.name[:3]}'.",
         }
     elif guess_count == 4:
         return {
             "show": True,
             "title": "Want another hint?",
-            "message": f"My genus is '{bird.genus}'."
+            "message": f"My genus is '{bird.genus}'.",
         }
     else:  # guess_count == 3
         return {
             "show": True,
             "title": "Want a hint?",
-            "message": f"I'm in the {bird.family} family."
+            "message": f"I'm in the {bird.family} family.",
         }
 
 
