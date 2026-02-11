@@ -52,7 +52,7 @@
             {% get_regions as regions %}
             {% for code, name in regions.items %}
             <li>
-              <a href="#" name={{code}} class="dropdown-item" hx-post="/region" hx-target="#region" hx-swap="innerHTML">{{name}}</a>
+              <a href="/{{code}}/" name={{code}} class="dropdown-item" hx-post="/region" hx-target="#region" hx-swap="innerHTML">{{name}}</a>
             </li>
             {% endfor%}
           </ul>
