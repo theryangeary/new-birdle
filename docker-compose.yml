@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: birdle
+      POSTGRES_USER: birdle
+      POSTGRES_PASSWORD: birdle
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U birdle"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://birdle:birdle@db:5432/birdle
+      - DJANGO_SECRET_KEY=change-me-in-production
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - EBIRD_API_KEY=your-ebird-api-key-here
+
+volumes:
+  postgres_data:
