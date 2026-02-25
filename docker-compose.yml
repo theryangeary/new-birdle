@@ -20,13 +20,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - path: .env
-        required: false
     environment:
       - DATABASE_URL=postgres://birdle:birdle@db:5432/birdle
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change-me-in-production}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - DJANGO_SECRET_KEY=change-me-in-production
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - EBIRD_API_KEY=your-ebird-api-key-here
 
 volumes:
   postgres_data:
