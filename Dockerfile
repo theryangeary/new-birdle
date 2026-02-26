@@ -1,7 +1,11 @@
 # Stage 1: Build dependencies and collect static files
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS build
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS build
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first (layer caching)
 COPY pyproject.toml .
@@ -15,7 +19,7 @@ RUN DJANGO_SECRET_KEY=build-placeholder DATABASE_URL=sqlite:///tmp/build.db \
     uv run python manage.py collectstatic --noinput
 
 # Stage 2: Lean runtime image
-FROM python:3.13-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 

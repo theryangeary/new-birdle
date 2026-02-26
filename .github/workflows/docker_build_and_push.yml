@@ -1,0 +1,8 @@
+name: Publish to GHCR.io
+
+on: [push]
+
+jobs:
+  call-workflow:
+    uses: theryangeary/actions-workflows/.github/workflows/docker_build_and_push.yml@6857a37ccce008ff19e14959e85cdd028716c831
+    secrets: inherit
